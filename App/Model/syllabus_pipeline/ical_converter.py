@@ -37,6 +37,12 @@ def _parse_datetime(date_value: str, time_value: str):
     return date_parser.parse(date_value)
 
 
+def _parse_date_only(date_value: str):
+    if not date_value:
+        return None
+    return date_parser.parse(date_value).date()
+
+
 def workflow_to_ical(workflow_data: Dict[str, List[List[str]]], output_path: str, default_duration_minutes: int = 60) -> str:
     lines: List[str] = [
         "BEGIN:VCALENDAR",
@@ -52,6 +58,8 @@ def workflow_to_ical(workflow_data: Dict[str, List[List[str]]], output_path: str
         if len(exam) < 8:
             continue
         subject, date, event_type, start_time, end_time, location, name, grade_weight = exam[:8]
+        if not start_time:
+            continue
         start_dt = _parse_datetime(date, start_time)
         end_dt = _parse_datetime(date, end_time) if end_time else None
 
@@ -75,32 +83,22 @@ def workflow_to_ical(workflow_data: Dict[str, List[List[str]]], output_path: str
         if len(item) < 6:
             continue
         subject, date, event_type, due_time, name, grade_weight = item[:6]
-        due_dt = _parse_datetime(date, due_time)
-        if due_dt:
-            due_end = due_dt + timedelta(minutes=30)
-            dtstart = due_dt.strftime("%Y%m%dT%H%M%S")
-            dtend = due_end.strftime("%Y%m%dT%H%M%S")
-            all_day = False
-        else:
-            due_day = _parse_datetime(date, "")
-            if due_day is None:
-                continue
-            next_day = due_day + timedelta(days=1)
-            dtstart = due_day.strftime("%Y%m%d")
-            dtend = next_day.strftime("%Y%m%d")
-            all_day = True
+        due_day = _parse_date_only(date)
+        if due_day is None:
+            continue
+        next_day = due_day + timedelta(days=1)
+        dtstart = due_day.strftime("%Y%m%d")
+        dtend = next_day.strftime("%Y%m%d")
 
         lines.append("BEGIN:VEVENT")
         _add_ics_field(lines, "UID", f"{uuid4()}@catapult.local")
         _add_ics_field(lines, "DTSTAMP", now_utc)
-        if all_day:
-            _add_ics_field(lines, "DTSTART;VALUE=DATE", dtstart)
-            _add_ics_field(lines, "DTEND;VALUE=DATE", dtend)
-        else:
-            _add_ics_field(lines, "DTSTART", dtstart)
-            _add_ics_field(lines, "DTEND", dtend)
+        _add_ics_field(lines, "DTSTART;VALUE=DATE", dtstart)
+        _add_ics_field(lines, "DTEND;VALUE=DATE", dtend)
         _add_ics_field(lines, "SUMMARY", _escape_ics_text(f"{subject} {name}".strip()))
         description = f"Type: {event_type}; Weight: {grade_weight}".strip()
+        if due_time:
+            description = f"{description}; Due Time (source): {due_time}".strip()
         _add_ics_field(lines, "DESCRIPTION", _escape_ics_text(description))
         lines.append("END:VEVENT")
 
@@ -108,5 +106,6 @@ def workflow_to_ical(workflow_data: Dict[str, List[List[str]]], output_path: str
 
     path = Path(output_path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text("\r\n".join(lines) + "\r\n", encoding="utf-8")
+    ics_text = "\r\n".join(lines) + "\r\n"
+    path.write_bytes(ics_text.encode("utf-8"))
     return str(path)

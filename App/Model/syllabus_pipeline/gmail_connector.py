@@ -1,7 +1,10 @@
 from pathlib import Path
 from typing import Optional
+from datetime import datetime
+import os
 
 SCOPES = ["https://www.googleapis.com/auth/calendar"]
+DEFAULT_TIMEZONE = os.getenv("CATAPULT_DEFAULT_TIMEZONE", "America/Indiana/Indianapolis")
 
 
 def _get_google_credentials(credentials_file: str, token_file: str):
@@ -76,6 +79,11 @@ def sync_ical_to_google_calendar(
         if hasattr(start_value, "hour"):
             start_obj = {"dateTime": start_value.isoformat()}
             end_obj = {"dateTime": end_value.isoformat()}
+
+            if isinstance(start_value, datetime) and (start_value.tzinfo is None or start_value.tzinfo.utcoffset(start_value) is None):
+                start_obj["timeZone"] = DEFAULT_TIMEZONE
+            if isinstance(end_value, datetime) and (end_value.tzinfo is None or end_value.tzinfo.utcoffset(end_value) is None):
+                end_obj["timeZone"] = DEFAULT_TIMEZONE
         else:
             start_obj = {"date": start_value.isoformat()}
             end_obj = {"date": end_value.isoformat()}

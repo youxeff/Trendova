@@ -5,3 +5,4 @@ from .gmail_connector import sync_ical_to_google_calendar
 from .brightspace_client import BrightspaceClient
 from .brightspace_transformer import brightspace_items_to_workflow
 from .dashboard_export import build_dashboard_payload, save_dashboard_payload
+from .brightspace_ics_client import download_ics_feed, load_ics_events, ics_events_to_workflow

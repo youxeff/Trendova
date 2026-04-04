@@ -32,13 +32,71 @@ def _derive_name(source_text: str, subject: str, assignment_type: str) -> str:
     return cleaned[:80].strip(" .")
 
 
+def _normalize_time_text(value: str) -> str:
+    text = (value or "").strip()
+    if not text:
+        return ""
+    text = text.replace("â€“", "-").replace("–", "-").replace("—", "-").replace("−", "-")
+    text = re.sub(r"\s+", " ", text)
+    text = re.sub(r"\s*-\s*", " - ", text)
+    return text.strip()
+
+
+def _extract_time_range_from_source(source_text: str) -> str:
+    text = _normalize_time_text(source_text)
+    if not text:
+        return ""
+
+    range_pattern = re.compile(
+        r"\b\d{1,2}(?::\d{2})?\s*(?:am|pm)?\s*(?:-|to)\s*\d{1,2}(?::\d{2})?\s*(?:am|pm)\b",
+        flags=re.IGNORECASE,
+    )
+    single_pattern = re.compile(r"\b\d{1,2}(?::\d{2})?\s*(?:am|pm)\b", flags=re.IGNORECASE)
+
+    range_match = range_pattern.search(text)
+    if range_match:
+        return range_match.group(0).strip()
+
+    single_match = single_pattern.search(text)
+    if single_match:
+        return single_match.group(0).strip()
+
+    return ""
+
+
+def _clean_exam_name(name: str) -> str:
+    value = _normalize_time_text(name)
+    if not value:
+        return value
+
+    value = re.sub(
+        r"\s+\d{1,2}(?::\d{2})?\s*(?:am|pm)?\s*(?:-|to)\s*\d{1,2}(?::\d{2})?\s*(?:am|pm)\b.*$",
+        "",
+        value,
+        flags=re.IGNORECASE,
+    )
+    value = re.sub(r"\s{2,}", " ", value).strip(" -;,")
+    return value
+
+
 def _split_time_range(time_value: str) -> Tuple[str, str]:
-    if not time_value:
+    normalized = _normalize_time_text(time_value)
+    if not normalized:
         return "", ""
-    parts = re.split(r"\\s*(?:-|–|to)\\s*", time_value, maxsplit=1)
+
+    parts = re.split(r"\s*(?:-|to)\s*", normalized, maxsplit=1, flags=re.IGNORECASE)
     if len(parts) == 2:
-        return parts[0].strip(), parts[1].strip()
-    return time_value.strip(), ""
+        start = parts[0].strip()
+        end = parts[1].strip()
+
+        end_meridiem = re.search(r"\b(am|pm)\b", end, flags=re.IGNORECASE)
+        start_meridiem = re.search(r"\b(am|pm)\b", start, flags=re.IGNORECASE)
+        if end_meridiem and not start_meridiem:
+            start = f"{start} {end_meridiem.group(1)}"
+
+        return start, end
+
+    return normalized, ""
 
 
 def convert_rows_to_workflow_format(rows: List[List[str]]) -> dict:
@@ -55,7 +113,9 @@ def convert_rows_to_workflow_format(rows: List[List[str]]) -> dict:
         name = _derive_name(source_text, subject or "Unknown", normalized_type or "assignment")
 
         if normalized_type in {"exam", "quiz"}:
-            start_time, end_time = _split_time_range(time_value)
+            effective_time_value = time_value or _extract_time_range_from_source(source_text)
+            start_time, end_time = _split_time_range(effective_time_value)
+            clean_name = _clean_exam_name(name)
             exams_quizzes.append([
                 subject,
                 date,
@@ -63,7 +123,7 @@ def convert_rows_to_workflow_format(rows: List[List[str]]) -> dict:
                 start_time,
                 end_time,
                 location,
-                name,
+                clean_name or name,
                 grade_weight,
             ])
         else:

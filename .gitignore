@@ -1,3 +1,10 @@
 .env
 client_secret.json
+App/google_client_secret.json
+App/output/
+output/
+*.token.json
+*google_token*.json
+__pycache__/
+*.pyc
 

@@ -167,3 +167,71 @@ def extract_deadlines_with_gemini(
         return []
 
     return _extract_json_array_from_text(combined)
+
+
+def extract_deadlines_from_text_with_gemini(
+    text: str,
+    api_key: str,
+    model: str = "gemini-3-flash-preview",
+    retries: int = 3,
+) -> List[List[str]]:
+    if not api_key:
+        raise ValueError("Gemini API key is required")
+
+    if not text or not text.strip():
+        return []
+
+    payload = {
+        "contents": [{"parts": [{"text": build_text_prompt(text)}]}],
+        "generationConfig": {"temperature": 0.1},
+    }
+
+    data = None
+    last_error = None
+
+    for api_version in ["v1beta", "v1"]:
+        url = (
+            f"https://generativelanguage.googleapis.com/{api_version}/models/"
+            f"{model}:generateContent?key={api_key}"
+        )
+        try:
+            for attempt in range(retries):
+                response = requests.post(url, json=payload, timeout=180)
+                if response.status_code == 503 and attempt < retries - 1:
+                    time.sleep(2 + attempt)
+                    continue
+
+                if response.status_code == 404:
+                    last_error = f"404 for model '{model}' on {api_version}"
+                    break
+
+                if response.status_code >= 400:
+                    try:
+                        err = response.json()
+                    except Exception:
+                        err = response.text
+                    last_error = f"HTTP {response.status_code} on {api_version}/{model}: {err}"
+                    break
+
+                data = response.json()
+                break
+
+            if data is not None:
+                break
+        except requests.RequestException as exc:
+            last_error = str(exc)
+            continue
+
+    if data is None:
+        raise RuntimeError(f"Gemini request failed. Last error: {last_error}")
+
+    candidates = data.get("candidates", [])
+    if not candidates:
+        return []
+
+    parts = candidates[0].get("content", {}).get("parts", [])
+    combined = "\n".join(part.get("text", "") for part in parts if isinstance(part, dict))
+    if not combined.strip():
+        return []
+
+    return _extract_json_array_from_text(combined)

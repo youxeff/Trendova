@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Optional
 
 try:
+    from .syllabus_pipeline.brightspace_ics_client import download_ics_feed, load_ics_events, ics_events_to_workflow
     from .syllabus_pipeline.brightspace_client import BrightspaceClient
     from .syllabus_pipeline.brightspace_transformer import brightspace_items_to_workflow
     from .syllabus_pipeline.dashboard_export import build_dashboard_payload, save_dashboard_payload
@@ -13,6 +14,7 @@ try:
     from .syllabus_pipeline.gmail_connector import sync_ical_to_google_calendar
     from .syllabus_pipeline.ical_converter import workflow_to_ical
 except ImportError:
+    from syllabus_pipeline.brightspace_ics_client import download_ics_feed, load_ics_events, ics_events_to_workflow
     from syllabus_pipeline.brightspace_client import BrightspaceClient
     from syllabus_pipeline.brightspace_transformer import brightspace_items_to_workflow
     from syllabus_pipeline.dashboard_export import build_dashboard_payload, save_dashboard_payload
@@ -31,6 +33,9 @@ def run_pipeline(
     brightspace_token: Optional[str],
     brightspace_org_unit_id: Optional[str],
     brightspace_api_version: str,
+    brightspace_ics_url: Optional[str],
+    brightspace_ics_file: Optional[str],
+    save_brightspace_ics: Optional[str],
     subject_fallback: str,
     output_mode: str,
     pretty: bool,
@@ -59,6 +64,22 @@ def run_pipeline(
             "api_version": brightspace_api_version,
             "used_endpoints": latest_data.get("used_endpoints", []),
             "items_count": len(latest_data.get("items", [])),
+        }
+        output = workflow_output
+    elif source == "brightspace-ics":
+        if brightspace_ics_url:
+            ics_path = download_ics_feed(brightspace_ics_url, output_path=save_brightspace_ics)
+        elif brightspace_ics_file:
+            ics_path = brightspace_ics_file
+        else:
+            raise ValueError("Brightspace ICS source requires --brightspace-ics-url or --brightspace-ics-file")
+
+        events = load_ics_events(ics_path)
+        workflow_output = ics_events_to_workflow(events, subject_fallback=subject_fallback)
+        rows = []
+        metadata = {
+            "ics_path": ics_path,
+            "events_count": len(events),
         }
         output = workflow_output
     else:
@@ -133,6 +154,9 @@ def run_local_tester(default_path: Optional[str], args) -> None:
             brightspace_token=args.brightspace_token,
             brightspace_org_unit_id=args.brightspace_org_unit_id,
             brightspace_api_version=args.brightspace_api_version,
+            brightspace_ics_url=args.brightspace_ics_url,
+            brightspace_ics_file=args.brightspace_ics_file,
+            save_brightspace_ics=args.save_brightspace_ics,
             subject_fallback=args.subject_fallback,
             output_mode=args.output_mode,
             pretty=args.pretty,
@@ -148,7 +172,7 @@ def run_local_tester(default_path: Optional[str], args) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description="Parse syllabus/Brightspace data and optionally export/sync calendar.")
     parser.add_argument("pdf", nargs="?", help="Path to PDF file")
-    parser.add_argument("--source", choices=["pdf", "brightspace"], default="pdf", help="Input source")
+    parser.add_argument("--source", choices=["pdf", "brightspace", "brightspace-ics"], default="pdf", help="Input source")
     parser.add_argument("--use-llm", action="store_true", help="Backward-compatible no-op (PDF source already uses LLM)")
     parser.add_argument("--pretty", action="store_true", help="Pretty-print JSON output")
     parser.add_argument("--local-test", action="store_true", help="Run interactive local tester mode")
@@ -167,6 +191,9 @@ def main() -> None:
     parser.add_argument("--brightspace-token", help="Brightspace bearer token")
     parser.add_argument("--brightspace-org-unit-id", help="Brightspace org unit (course) ID")
     parser.add_argument("--brightspace-api-version", default="1.75", help="Brightspace LE API version")
+    parser.add_argument("--brightspace-ics-url", help="Brightspace ICS feed URL")
+    parser.add_argument("--brightspace-ics-file", help="Local Brightspace ICS file path")
+    parser.add_argument("--save-brightspace-ics", help="Optional path to save downloaded Brightspace ICS")
     parser.add_argument("--subject-fallback", default="Course", help="Fallback subject name for Brightspace items")
 
     parser.add_argument("--save-ics", help="Path to write generated .ics file")
@@ -204,6 +231,9 @@ def main() -> None:
         brightspace_token=args.brightspace_token,
         brightspace_org_unit_id=args.brightspace_org_unit_id,
         brightspace_api_version=args.brightspace_api_version,
+        brightspace_ics_url=args.brightspace_ics_url,
+        brightspace_ics_file=args.brightspace_ics_file,
+        save_brightspace_ics=args.save_brightspace_ics,
         subject_fallback=args.subject_fallback,
         output_mode=args.output_mode,
         pretty=args.pretty,
