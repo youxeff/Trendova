@@ -5,7 +5,6 @@ import asyncio
 import logging
 from Database.config import get_db
 from Database.data import insert_product
-from Model.new_trend import run_pipeline  # Async SEO keyword generator
 
 # Configure logging
 logger = logging.getLogger(__name__)

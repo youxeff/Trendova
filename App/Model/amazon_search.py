@@ -1,4 +1,3 @@
-import pandas as pd
 import http.client
 import urllib.parse
 import json
@@ -6,11 +5,6 @@ import logging
 from Database.config import get_db
 from Database.data import insert_product
 
-# Load product names from Excel
-df = pd.read_excel("/Users/youssefabdelkader/Documents/GitHub/Catapult/App/Model/trends.xlsx")
-products = df.iloc[:, 0].dropna().tolist()
-
-# Configure logging
 logger = logging.getLogger(__name__)
 
 async def search_amazon_products(keyword):
