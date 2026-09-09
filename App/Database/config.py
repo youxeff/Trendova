@@ -14,10 +14,10 @@ load_dotenv()
 
 # Database configuration with secure defaults
 DB_CONFIG = {
-    'host': os.getenv('DB_HOST', 'productsdb.cvce864kqv1q.us-east-2.rds.amazonaws.com'),
-    'user': os.getenv('DB_USER', 'admin'),
-    'password': os.getenv('DB_PASSWORD', 'malaysiaboleh'),
-    'database': os.getenv('DB_NAME', 'productsdb'),
+    'host': os.getenv('DB_HOST'),
+    'user': os.getenv('DB_USER'),
+    'password': os.getenv('DB_PASSWORD'),
+    'database': os.getenv('DB_NAME'),
     'port': os.getenv('DB_PORT', '3306')
 }
 

@@ -8,10 +8,6 @@ from sqlalchemy.exc import SQLAlchemyError
 from datetime import datetime
 import asyncio
 import logging
-from Model.new_trend import run_pipeline
-from Model.cj_product_matcher import get_cj_products_and_store
-from Model.aliexpress import get_products as ali_search
-from Model.amazon_search import search_amazon_products
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -85,6 +81,12 @@ def get_trending():
 
 @app.route("/api/search", methods=["POST"])
 async def unified_search():
+    # Imported here so sentence-transformers and torch are not loaded at startup.
+    # They are only needed for this route, which is not deployed.
+    from Model.new_trend import run_pipeline
+    from Model.cj_product_matcher import get_cj_products_and_store
+    from Model.aliexpress import get_products as ali_search
+    from Model.amazon_search import search_amazon_products
     data = request.get_json()
     query = data.get("query", "").strip()
 
@@ -137,4 +139,4 @@ async def unified_search():
         return jsonify({"error": "Search failed", "details": str(e)}), 500
 
 if __name__ == "__main__":
-    app.run(debug=True, port=5001)
+    app.run(debug=True, host='0.0.0.0', port=5001)
